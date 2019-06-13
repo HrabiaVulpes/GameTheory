@@ -1,3 +1,14 @@
 Dane miejsca produkcyjne mają określoną bazową produkcje, 
 i możliwą maksymalną produkcję, bazowa produkcje = podaż, 
 maksymalna to maksymalny popyt, jeżeli ktoś długo będzie wykożystywał maksymalną produkcję ma z tego powodu debuffy
+
+Podatki:
+
+Pr - bazowa produkcja
+Po - popyt (konsumpcja + handel)
+Pd - podaż (produkcja + handel)
+
+Val - wartość produkcji
+
+Val = Po/Pd * Pr
+Podatki stanowią jakiś % tej wartości zależny od praw
