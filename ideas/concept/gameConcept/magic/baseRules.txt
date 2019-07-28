@@ -1,0 +1,11 @@
+Odzyskuje manę do pełna jeśli śpi przez co najmniej 4 godziny.
+Odzyskuje manę do połowy maksimum jeśli odpoczywa przez godzinę.
+
+Rodzaje czarów:
+    - Zaklęcia - natychmiastowy efekt, jednorazowa zapłata many
+        * Kryształowe - tworzenia i używania obiektów
+        * Wietrzne - manipulacja energią
+        * Przywołania - przywoływanie istot do walki
+    - Inkantacje - efekt trwa dopóki płacisz manę i utrzymujesz go
+    - Rytuały - ich użycie zabiera czas zamiast many
+    - Klątwy - trwałe zaklęcia o sytuacyjnych efektach na plus i minus
