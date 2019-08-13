@@ -1,0 +1,311 @@
+package com.sabre.dr.ancman.webtestsbase;
+
+import com.sabre.dr.ancman.configuration.TestsConfig;
+import org.openqa.selenium.UnexpectedAlertBehaviour;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
+import org.openqa.selenium.ie.ElementScrollBehavior;
+import org.openqa.selenium.ie.InternetExplorerDriver;
+import org.openqa.selenium.ie.InternetExplorerOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
+import org.openqa.selenium.remote.SessionId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sun.net.www.protocol.http.HttpURLConnection;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.UnknownHostException;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Created by Sidelnikov Mikhail on 18.09.14.
+ * Base class for web tests. It contains web driver {@link org.openqa.selenium.WebDriver} instance, used in all tests.
+ * All communications with driver should be done through this class
+ */
+public class WebDriverFactory {
+    private final Logger LOG = LoggerFactory.getLogger(getClass());
+    private static final String PATH_TO_CHROMEDRIVER = "tools/chrome/chromedriver.exe";
+    private static final String PATH_TO_IEDRIVER = "tools/ie/IEDriverServer_win32.exe";
+    private static final String SELENIUM_GRID_URL = "http://ltxw0856.sgdcelab.sabre.com:4444";
+    private static final long IMPLICIT_WAIT_TIMEOUT = 5;
+    private static WebDriver driver;
+
+    public static WebDriver getDriver() {
+        if (driver != null) {
+            return driver;
+        } else {
+            throw new IllegalStateException("Driver has not been initialized. " +
+                    "Please call WebDriverFactory.startBrowser() before use this method");
+        }
+    }
+
+    /**
+     * Main method of class - it initialize driver and starts browser.
+     *
+     * @param isLocal - is tests will be started local or not
+     */
+    public void startBrowser(boolean isLocal, String browserName) {
+        if (driver == null) {
+            Browser browser = new TestsConfig().getBrowser(browserName);
+            if (!isLocal) {
+                try {
+                    driver = new RemoteWebDriver(new URL(SELENIUM_GRID_URL + "/wd/hub"), CapabilitiesGenerator.getDefaultCapabilities(browser));
+
+                    SessionId sessionId = ((RemoteWebDriver) driver).getSessionId();
+
+                    LOG.info("Browser [" + browserName + "] opened on Selenium GRID " + getNodeUrlFromGridBySessionId(sessionId) + " with sessionID: " + sessionId);
+                } catch (MalformedURLException murle) {
+                    System.out.println("Unable to connect with Selenium Grid");
+                }
+            } else {
+                switch (browser) {
+                    case FIREFOX:
+                        FirefoxOptions firefoxOptions = new FirefoxOptions();
+                        firefoxOptions.setCapability("marionette", true);
+                        driver = new FirefoxDriver(firefoxOptions);
+                        break;
+                    case CHROME:
+                        System.setProperty("webdriver.chrome.driver", PATH_TO_CHROMEDRIVER);
+                        driver = new ChromeDriver();
+                        break;
+                    case IE:
+                        System.setProperty("webdriver.ie.driver", PATH_TO_IEDRIVER);
+                        //TODO work in progress
+                        InternetExplorerOptions ieOptions = new InternetExplorerOptions()
+                                .ignoreZoomSettings()
+                                .enablePersistentHovering()
+                                .requireWindowFocus()
+                                .destructivelyEnsureCleanSession()
+                                .elementScrollTo(ElementScrollBehavior.BOTTOM)
+                                .setUnhandledPromptBehaviour(UnexpectedAlertBehaviour.DISMISS);
+                        driver = new InternetExplorerDriver(ieOptions);
+                        break;
+                    default:
+                        throw new IllegalStateException("Unsupported browser type");
+                }
+                LOG.info("Browser [" + browserName + "] opened on local machine " + getLocalMachineName());
+            }
+            driver.manage().timeouts().implicitlyWait(IMPLICIT_WAIT_TIMEOUT, TimeUnit.SECONDS);
+            driver.manage().window().maximize();
+        } else {
+            throw new IllegalStateException("Driver has already been initialized. Quit it before using this method");
+        }
+    }
+
+    private String getLocalMachineName() {
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    private String getNodeUrlFromGridBySessionId(SessionId sessionId) {
+
+        try {
+            URL url = new URL(SELENIUM_GRID_URL + "/grid/api/testsession?session=" + sessionId.toString());
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String inputLine;
+            StringBuffer response = new StringBuffer();
+
+            while ((inputLine = bufferedReader.readLine()) != null) {
+                response.append(inputLine);
+            }
+            bufferedReader.close();
+
+            return getNodeURLFromResponse(response);
+
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return "UNKNOWN";
+    }
+
+    private String getNodeURLFromResponse(StringBuffer response) {
+        Pattern proxyIdPattern = Pattern.compile("\"proxyId\":\"(.*)\",\"session");
+        Matcher proxyId = proxyIdPattern.matcher(response);
+        proxyId.find();
+        return proxyId.group(1);
+    }
+
+    /**
+     * Finishes browser
+     */
+    public static void finishBrowser() {
+        if (driver != null) {
+            driver.quit();
+            driver = null;
+        }
+    }
+}
+
+
+package com.sabre.dr.ancman.webtestsbase;
+
+import org.openqa.selenium.remote.DesiredCapabilities;
+
+/**
+ * Created by Sidelnikov Mikhail on 18.09.14.
+ * Class presents functionality for generation of {@link org.openqa.selenium.remote.DesiredCapabilities} object
+ * need for some browsers start
+ */
+class CapabilitiesGenerator
+{
+
+    private static final String PATH_TO_CHROMEDRIVER_EXE = "C:\\Users\\sg0943274\\Desktop\\Useful\\Backup\\Training\\Grid\\chromedriver.exe";
+
+    /**
+     * getting {@link org.openqa.selenium.remote.DesiredCapabilities} object based on browser
+     * ATTENTION: you should specify the path to chrome driver executable file to run tests on it(@see <a href="https://sites.google.com/a/chromium.org/chromedriver/getting-started">here for more info</a>)
+     * @param browser {@link Browser} object
+     * @return capabilites needed for some browsers start
+     */
+    static DesiredCapabilities getDefaultCapabilities(Browser browser)
+    {
+        switch (browser)
+        {
+            case CHROME:
+                System.setProperty("webdriver.chrome.driver", PATH_TO_CHROMEDRIVER_EXE);
+                if (System.getProperty("webdriver.chrome.driver") == null)
+                {
+                    throw new IllegalStateException("System variable 'webdriver.chrome.driver' should be set to path for executable driver");
+                }
+                return DesiredCapabilities.chrome();
+            case IE:
+                DesiredCapabilities caps = DesiredCapabilities.internetExplorer();
+                caps.setVersion("10");
+                return caps;
+            default:
+                throw new IllegalStateException("Browser is not supported");
+        }
+    }
+
+}
+
+
+package com.sabre.dr.ancman.webtestsbase;
+
+/**
+ * Created by Sidelnikov Mikhail on 17.09.14.
+ * This class represents browsers. For add support of your browser - add it to this enum
+ */
+public enum Browser
+{
+    FIREFOX("firefox"),
+    CHROME("chrome"),
+    IE("ie"),
+    EDGE("egde"),
+    SAFARI("safari");
+    private String browserName;
+
+    Browser(String browserName)
+    {
+        this.browserName = browserName;
+    }
+
+    public String getBrowserName()
+    {
+        return browserName;
+    }
+
+    /**
+     * returns browser object by name
+     * @param name name of browser
+     * @return browser object
+     */
+    public static Browser getByName(String name)
+    {
+        for (Browser browser : values())
+        {
+            if (browser.getBrowserName().equalsIgnoreCase(name))
+            {
+                return browser;
+            }
+        }
+        return null;
+    }
+
+}
+
+
+package com.sabre.dr.ancman.webtestsbase;
+
+import com.sabre.dr.ancman.utils.TimeUtils;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.support.PageFactory;
+
+/**
+ * Created by Sidelnikov Mikhail on 19.09.14.
+ * This is the main class for pages. When you create your page - you must extend your class from this
+ */
+public abstract class BasePage
+{
+    protected static final int WAIT_FOR_PAGE_LOAD_IN_SECONDS = 5;
+
+    /**
+     * In subclasses  should be used for page opening
+     */
+    protected abstract void openPage();
+
+    /**
+     * checks is page opened
+     * @return true if opened
+     */
+    public abstract boolean isPageOpened();
+
+    public BasePage(boolean openPageByUrl)
+    {
+        if (openPageByUrl)
+        {
+            openPage();
+        }
+        PageFactory.initElements(getDriver(), this);
+        waitForOpen();
+    }
+
+    /**
+     * Waiting for page opening
+     */
+    protected void waitForOpen()
+    {
+        int secondsCount = 0;
+        boolean isPageOpenedIndicator = isPageOpened();
+        while (!isPageOpenedIndicator && secondsCount < WAIT_FOR_PAGE_LOAD_IN_SECONDS)
+        {
+            TimeUtils.waitForSeconds(1);
+            secondsCount++;
+            isPageOpenedIndicator = isPageOpened();
+        }
+        if (!isPageOpenedIndicator)
+        {
+            throw new AssertionError("Page was not opened");
+        }
+    }
+
+    /**
+     * getting webdriver instance
+     * @return initialized in tests webdriver instance
+     */
+    protected WebDriver getDriver()
+    {
+        return WebDriverFactory.getDriver();
+    }
+
+    protected String getBaseURL(String url){
+        return url.substring(0, url.indexOf("#")-1);
+    }
+}
